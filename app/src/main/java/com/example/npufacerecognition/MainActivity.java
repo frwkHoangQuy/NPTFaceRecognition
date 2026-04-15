@@ -1,6 +1,7 @@
 package com.example.npufacerecognition;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -31,6 +32,8 @@ public class MainActivity extends AppCompatActivity {
         System.loadLibrary("npufacerecognition");
     }
 
+    private final String TAG = "MainActivity";
+
     private ActivityMainBinding binding;
 
     private PreviewView previewView;
@@ -47,11 +50,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         int ketqua = sumFromCPP(100, 200);
-        Log.d("TAG", "Ket qua: " + ketqua);
+        Log.d(TAG, "Ket qua: " + ketqua);
 
-        Log.d("TAG", process());
+        Log.d(TAG, process());
 
-        Log.d("TAG", getNPUInfo(getAssets()));
+        Log.d(TAG, getNPUInfo(getAssets()));
 
         previewView = binding.previewView;
         faceOverlayView = binding.faceOverlayView;
@@ -77,7 +80,7 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startCamera();
             } else {
-                Log.e("TAG", "Camera permission denied");
+                Log.e(TAG, "Camera permission denied");
             }
         }
     }
@@ -88,8 +91,18 @@ public class MainActivity extends AppCompatActivity {
         future.addListener(() -> {
             try {
                 ProcessCameraProvider provider = future.get();
+                Log.d(TAG, "Camera provider obtained: " + provider);
+                //Liên kết tầng preview của camera với lifecycle của activity
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+                // Chọn camera sau làm nguồn video
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
+                // Ngắt liên kết tất cả các use case trước khi liên kết mới
+                provider.unbindAll();
+                // Liên kết use case preview với lifecycle của activity
+                provider.bindToLifecycle(this, cameraSelector, preview);
             } catch (Exception e) {
-                Log.e("TAG", "Camera start failed: " + e.getMessage());
+                Log.e(TAG, "Camera start failed: " + e.getMessage());
             }
         }, ContextCompat.getMainExecutor(this));
     }
