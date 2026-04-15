@@ -16,8 +16,8 @@
 // =============================================================
 // GLOBAL: giữ model context thường trú sau khi init
 // =============================================================
-static rknn_context g_ctx    = 0;
-static bool         g_loaded = false;
+static rknn_context g_ctx = 0;
+static bool g_loaded = false;
 
 // =============================================================
 // HELPER: đọc 1 dòng từ sysfs, trim newline
@@ -46,30 +46,34 @@ static std::string hz_to_mhz(const std::string &hz) {
 //   Thêm thông tin NPU mới vào đây
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_npufacerecognition_MainActivity_queryNPUInfo(JNIEnv*, jobject) {
+Java_com_example_npufacerecognition_MainActivity_queryNPUInfo(JNIEnv *, jobject) {
 
     // --- Devfreq: tìm đường dẫn NPU đúng theo từng chip ---
     const char *candidates[] = {
-        "/sys/class/devfreq/fde40000.npu",  // RK3588
-        "/sys/class/devfreq/fdab0000.npu",  // RK3588s
-        "/sys/class/devfreq/ff400000.npu",  // RK3566/3568
-        nullptr
+            "/sys/class/devfreq/fde40000.npu",  // RK3588
+            "/sys/class/devfreq/fdab0000.npu",  // RK3588s
+            "/sys/class/devfreq/ff400000.npu",  // RK3566/3568
+            nullptr
     };
     const char *devfreq_base = nullptr;
     for (int i = 0; candidates[i] != nullptr; i++) {
         std::string probe = std::string(candidates[i]) + "/cur_freq";
         FILE *t = fopen(probe.c_str(), "r");
-        if (t) { fclose(t); devfreq_base = candidates[i]; break; }
+        if (t) {
+            fclose(t);
+            devfreq_base = candidates[i];
+            break;
+        }
     }
 
     // --- System properties ---
     char platform[PROP_VALUE_MAX] = {0};
     char hardware[PROP_VALUE_MAX] = {0};
-    char model[PROP_VALUE_MAX]    = {0};
-    char android[PROP_VALUE_MAX]  = {0};
-    __system_property_get("ro.board.platform",        platform);
-    __system_property_get("ro.hardware",              hardware);
-    __system_property_get("ro.product.model",         model);
+    char model[PROP_VALUE_MAX] = {0};
+    char android[PROP_VALUE_MAX] = {0};
+    __system_property_get("ro.board.platform", platform);
+    __system_property_get("ro.hardware", hardware);
+    __system_property_get("ro.product.model", model);
     __system_property_get("ro.build.version.release", android);
 
     LOGI("===== NPU Hardware Info =====");
@@ -80,11 +84,11 @@ Java_com_example_npufacerecognition_MainActivity_queryNPUInfo(JNIEnv*, jobject) 
 
     if (devfreq_base != nullptr) {
         auto p = [&](const char *sub) { return std::string(devfreq_base) + "/" + sub; };
-        std::string cur  = read_sysfs(p("cur_freq").c_str());
-        std::string mn   = read_sysfs(p("min_freq").c_str());
-        std::string mx   = read_sysfs(p("max_freq").c_str());
-        std::string gov  = read_sysfs(p("governor").c_str());
-        std::string avail= read_sysfs(p("available_frequencies").c_str());
+        std::string cur = read_sysfs(p("cur_freq").c_str());
+        std::string mn = read_sysfs(p("min_freq").c_str());
+        std::string mx = read_sysfs(p("max_freq").c_str());
+        std::string gov = read_sysfs(p("governor").c_str());
+        std::string avail = read_sysfs(p("available_frequencies").c_str());
         std::string load_raw = read_sysfs(p("load").c_str());
         size_t at = load_raw.find('@');
         std::string load = (at != std::string::npos) ? load_raw.substr(0, at) : load_raw;
@@ -111,12 +115,12 @@ Java_com_example_npufacerecognition_MainActivity_queryNPUInfo(JNIEnv*, jobject) 
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_npufacerecognition_MainActivity_queryModelInfo(JNIEnv *env, jobject,
-                                                                 jobject assetManager,
-                                                                 jstring modelFileName) {
+                                                                jobject assetManager,
+                                                                jstring modelFileName) {
     // --- Load model ---
     const char *filename = env->GetStringUTFChars(modelFileName, nullptr);
-    AAssetManager *mgr   = AAssetManager_fromJava(env, assetManager);
-    AAsset        *asset = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
+    AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
+    AAsset *asset = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
     env->ReleaseStringUTFChars(modelFileName, filename);
 
     if (!asset) {
@@ -186,7 +190,7 @@ Java_com_example_npufacerecognition_MainActivity_queryModelInfo(JNIEnv *env, job
     rknn_mem_size mem;
     memset(&mem, 0, sizeof(mem));
     if (rknn_query(ctx, RKNN_QUERY_MEM_SIZE, &mem, sizeof(mem)) == RKNN_SUCC) {
-        LOGI("  Weight   : %u KB", mem.total_weight_size   / 1024);
+        LOGI("  Weight   : %u KB", mem.total_weight_size / 1024);
         LOGI("  Internal : %u KB", mem.total_internal_size / 1024);
     }
 
@@ -210,8 +214,7 @@ static void yuv420_to_bgr_resized(
         int uv_row_stride,
         int uv_pixel_stride,
         float *out,
-        int dst_w, int dst_h)
-{
+        int dst_w, int dst_h) {
     for (int dst_row = 0; dst_row < dst_h; dst_row++) {
         for (int dst_col = 0; dst_col < dst_w; dst_col++) {
 
@@ -229,9 +232,9 @@ static void yuv420_to_bgr_resized(
             int V = (int) v_ptr[uv_row + uv_col] - 128;
 
             // Bước 4: BT.601 YUV → R, G, B
-            int R = Y + (int)(1.370705f * V);
-            int G = Y - (int)(0.337633f * U) - (int)(0.698001f * V);
-            int B = Y + (int)(1.732446f * U);
+            int R = Y + (int) (1.370705f * V);
+            int G = Y - (int) (0.337633f * U) - (int) (0.698001f * V);
+            int B = Y + (int) (1.732446f * U);
 
             // Clamp về [0, 255]
             R = R < 0 ? 0 : (R > 255 ? 255 : R);
@@ -256,11 +259,10 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
         jobject y_buffer, jobject u_buffer, jobject v_buffer,
         jint width, jint height,
         jint y_row_stride, jint uv_row_stride,
-        jint uv_pixel_stride)
-{
-    auto* y_ptr = (uint8_t*) env->GetDirectBufferAddress(y_buffer);
-    auto* u_ptr = (uint8_t*) env->GetDirectBufferAddress(u_buffer);
-    auto* v_ptr = (uint8_t*) env->GetDirectBufferAddress(v_buffer);
+        jint uv_pixel_stride) {
+    auto *y_ptr = (uint8_t *) env->GetDirectBufferAddress(y_buffer);
+    auto *u_ptr = (uint8_t *) env->GetDirectBufferAddress(u_buffer);
+    auto *v_ptr = (uint8_t *) env->GetDirectBufferAddress(v_buffer);
 
     if (!y_ptr || !u_ptr || !v_ptr) {
         LOGE("[runRetinaFace] GetDirectBufferAddress failed");
@@ -301,11 +303,11 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     rknn_input inputs[1];
     memset(inputs, 0, sizeof(inputs));
 
-    inputs[0].index        = 0;                          // tensor đầu vào số 0
-    inputs[0].type         = RKNN_TENSOR_FLOAT32;        // kiểu dữ liệu float32
-    inputs[0].size         = 320 * 320 * 3 * sizeof(float); // tổng bytes
-    inputs[0].fmt          = RKNN_TENSOR_NHWC;           // layout: [batch, H, W, C]
-    inputs[0].buf          = bgr_input;                  // trỏ vào buffer đã convert
+    inputs[0].index = 0;                          // tensor đầu vào số 0
+    inputs[0].type = RKNN_TENSOR_FLOAT32;        // kiểu dữ liệu float32
+    inputs[0].size = 320 * 320 * 3 * sizeof(float); // tổng bytes
+    inputs[0].fmt = RKNN_TENSOR_NHWC;           // layout: [batch, H, W, C]
+    inputs[0].buf = bgr_input;                  // trỏ vào buffer đã convert
     inputs[0].pass_through = 0;                          // để RKNN tự xử lý normalize nếu cần
 
     int ret = rknn_inputs_set(g_ctx, 1, inputs);
@@ -325,14 +327,42 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     if (frame_count % 30 == 1) {
         LOGI("[runRetinaFace] rknn_run OK — frame=%d", frame_count);
     }
+
+    /// Lấy output tensors
+
+    const int NUM_OUTPUTS = 3;
+    rknn_output outputs[NUM_OUTPUTS];
+    memset(outputs, 0, sizeof(outputs));
+
+    // want_float = 1: RKNN tự dequantize về float32 cho mình
+    for (int i = 0; i < NUM_OUTPUTS; i++) {
+        outputs[i].want_float = 1;
+        outputs[i].index = i;
+    }
+
+    ret = rknn_outputs_get(g_ctx, NUM_OUTPUTS, outputs, nullptr);
+    if (ret != RKNN_SUCC) {
+        LOGE("[runRetinaFace] rknn_outputs_get failed: %d", ret);
+        return;
+    }
+    // Log kiểm tra 4 giá trị đầu tiên của mỗi output
+    if (frame_count % 30 == 1) {
+        for (int i = 0; i < NUM_OUTPUTS; i++) {
+            auto *ptr = (float *) outputs[i].buf;
+            LOGI("[runRetinaFace] output[%d] size=%d  [0]=%.4f [1]=%.4f [2]=%.4f [3]=%.4f",
+                 i, outputs[i].size,
+                 ptr[0], ptr[1], ptr[2], ptr[3]);
+        }
+    }
+
+    rknn_outputs_release(g_ctx, NUM_OUTPUTS, outputs);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_npufacerecognition_MainActivity_initRetinaFace(
         JNIEnv *env, jobject,
         jobject assetManager,
-        jstring modelFileName)
-{
+        jstring modelFileName) {
     // Guard: không load lại nếu đã load rồi
     if (g_loaded) {
         LOGI("[initRetinaFace] Already loaded, skip");
@@ -340,9 +370,9 @@ Java_com_example_npufacerecognition_MainActivity_initRetinaFace(
     }
 
     // Mở file .rknn từ assets
-    AAssetManager *mgr      = AAssetManager_fromJava(env, assetManager);
-    const char    *filename = env->GetStringUTFChars(modelFileName, nullptr);
-    AAsset        *asset    = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
+    AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
+    const char *filename = env->GetStringUTFChars(modelFileName, nullptr);
+    AAsset *asset = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
     env->ReleaseStringUTFChars(modelFileName, filename);
 
     if (!asset) {
@@ -365,5 +395,5 @@ Java_com_example_npufacerecognition_MainActivity_initRetinaFace(
     }
 
     g_loaded = true;
-    LOGI("[initRetinaFace] NPU ready — g_ctx=%p", (void*)(uintptr_t)g_ctx);
+    LOGI("[initRetinaFace] NPU ready — g_ctx=%p", (void *) (uintptr_t) g_ctx);
 }
