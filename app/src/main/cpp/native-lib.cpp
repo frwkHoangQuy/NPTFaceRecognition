@@ -195,6 +195,59 @@ Java_com_example_npufacerecognition_MainActivity_queryModelInfo(JNIEnv *env, job
 }
 
 // =============================================================
+// HELPER: YUV420_888 → BGR float[320x320x3]
+//   • Nearest-neighbor resize
+//   • BT.601 YUV → RGB
+//   • Ghi thẳng thứ tự B, G, R (không swap)
+//   • Trừ mean: B-104, G-117, R-123
+// =============================================================
+static void yuv420_to_bgr_resized(
+        const uint8_t *y_ptr,
+        const uint8_t *u_ptr,
+        const uint8_t *v_ptr,
+        int src_w, int src_h,
+        int y_row_stride,
+        int uv_row_stride,
+        int uv_pixel_stride,
+        float *out,
+        int dst_w, int dst_h)
+{
+    for (int dst_row = 0; dst_row < dst_h; dst_row++) {
+        for (int dst_col = 0; dst_col < dst_w; dst_col++) {
+
+            // Bước 1: Nearest-neighbor — tính pixel nguồn tương ứng
+            int src_col = dst_col * src_w / dst_w;
+            int src_row = dst_row * src_h / dst_h;
+
+            // Bước 2: Đọc Y
+            int Y = (int) y_ptr[src_row * y_row_stride + src_col];
+
+            // Bước 3: Đọc U, V (subsampled 2x2, trừ 128 về signed)
+            int uv_row = (src_row / 2) * uv_row_stride;
+            int uv_col = (src_col / 2) * uv_pixel_stride;
+            int U = (int) u_ptr[uv_row + uv_col] - 128;
+            int V = (int) v_ptr[uv_row + uv_col] - 128;
+
+            // Bước 4: BT.601 YUV → R, G, B
+            int R = Y + (int)(1.370705f * V);
+            int G = Y - (int)(0.337633f * U) - (int)(0.698001f * V);
+            int B = Y + (int)(1.732446f * U);
+
+            // Clamp về [0, 255]
+            R = R < 0 ? 0 : (R > 255 ? 255 : R);
+            G = G < 0 ? 0 : (G > 255 ? 255 : G);
+            B = B < 0 ? 0 : (B > 255 ? 255 : B);
+
+            // Bước 5: Ghi thẳng BGR + trừ mean — không có bước swap
+            int idx = (dst_row * dst_w + dst_col) * 3;
+            out[idx + 0] = (float) B - 104.0f;   // channel 0 = B
+            out[idx + 1] = (float) G - 117.0f;   // channel 1 = G
+            out[idx + 2] = (float) R - 123.0f;   // channel 2 = R
+        }
+    }
+}
+
+// =============================================================
 // runRetinaFace: nhận YUV planes trực tiếp từ CameraX (zero-copy)
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
