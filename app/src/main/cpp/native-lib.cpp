@@ -292,4 +292,43 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     }
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_npufacerecognition_MainActivity_initRetinaFace(
+        JNIEnv *env, jobject,
+        jobject assetManager,
+        jstring modelFileName)
+{
+    // Guard: không load lại nếu đã load rồi
+    if (g_loaded) {
+        LOGI("[initRetinaFace] Already loaded, skip");
+        return;
+    }
 
+    // Mở file .rknn từ assets
+    AAssetManager *mgr      = AAssetManager_fromJava(env, assetManager);
+    const char    *filename = env->GetStringUTFChars(modelFileName, nullptr);
+    AAsset        *asset    = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
+    env->ReleaseStringUTFChars(modelFileName, filename);
+
+    if (!asset) {
+        LOGE("[initRetinaFace] Cannot open: %s", filename);
+        return;
+    }
+
+    // Đọc toàn bộ bytes vào buffer
+    off_t size = AAsset_getLength(asset);
+    std::vector<uint8_t> model_buf(size);
+    AAsset_read(asset, model_buf.data(), size);
+    AAsset_close(asset);
+    LOGI("[initRetinaFace] Read %ld bytes from assets", (long) size);
+
+    // Nạp model vào NPU
+    int ret = rknn_init(&g_ctx, model_buf.data(), (uint32_t) size, 0, nullptr);
+    if (ret != RKNN_SUCC) {
+        LOGE("[initRetinaFace] rknn_init failed: %d", ret);
+        return;
+    }
+
+    g_loaded = true;
+    LOGI("[initRetinaFace] NPU ready — g_ctx=%p", (void*)(uintptr_t)g_ctx);
+}
