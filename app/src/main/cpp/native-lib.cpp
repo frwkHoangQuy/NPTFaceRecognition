@@ -274,5 +274,22 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     }
     frame_count++;
 
-    // TODO Bước 5: yuv420_to_bgr888() + rknn_run
+    /// Chuẩn bị buffer đầu vào đã resize + convert sẵn cho model (320x320 BGR float)
+
+    static float bgr_input[320 * 320 * 3];
+
+    yuv420_to_bgr_resized(
+            y_ptr, u_ptr, v_ptr,
+            width, height,
+            y_row_stride, uv_row_stride, uv_pixel_stride,
+            bgr_input,
+            320, 320);
+
+    // Log kiểm tra pixel đầu tiên sau khi convert + resize (chỉ log mỗi 30 frames để tránh spam)
+    if (frame_count % 30 == 1) {
+        LOGI("[runRetinaFace] bgr[0] = B=%.1f G=%.1f R=%.1f",
+             bgr_input[0], bgr_input[1], bgr_input[2]);
+    }
 }
+
+
