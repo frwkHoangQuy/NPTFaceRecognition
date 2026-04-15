@@ -313,6 +313,18 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
         LOGE("[runRetinaFace] rknn_inputs_set failed: %d", ret);
         return;
     }
+
+    /// Chạy inference
+
+    ret = rknn_run(g_ctx, nullptr);
+    if (ret != RKNN_SUCC) {
+        LOGE("[runRetinaFace] rknn_run failed: %d", ret);
+        return;
+    }
+
+    if (frame_count % 30 == 1) {
+        LOGI("[runRetinaFace] rknn_run OK — frame=%d", frame_count);
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
