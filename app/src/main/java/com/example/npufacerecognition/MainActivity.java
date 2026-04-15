@@ -44,12 +44,13 @@ public class MainActivity extends AppCompatActivity {
         ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        previewView     = binding.previewView;
+        previewView = binding.previewView;
         faceOverlayView = binding.faceOverlayView;
 
         // Kiểm tra thông tin NPU và model khi khởi động
         queryNPUInfo();
         queryModelInfo(getAssets(), "RetinaFace_mobile320.rknn");
+        initRetinaFace(getAssets(), "RetinaFace_mobile320.rknn");
 
         cameraExecutor = Executors.newSingleThreadExecutor();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -141,7 +142,9 @@ public class MainActivity extends AppCompatActivity {
 
     // --- Native methods ---
     public native void queryNPUInfo();
+
     public native void queryModelInfo(AssetManager assetManager, String modelFileName);
+
     public native void runRetinaFace(
             java.nio.ByteBuffer yBuffer,
             java.nio.ByteBuffer uBuffer,
@@ -150,4 +153,7 @@ public class MainActivity extends AppCompatActivity {
             int yRowStride, int uvRowStride,
             int uvPixelStride
     );
+
+    private native void initRetinaFace(android.content.res.AssetManager assetManager,
+                                       String modelFileName);
 }

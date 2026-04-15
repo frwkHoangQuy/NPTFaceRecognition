@@ -290,6 +290,29 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
         LOGI("[runRetinaFace] bgr[0] = B=%.1f G=%.1f R=%.1f",
              bgr_input[0], bgr_input[1], bgr_input[2]);
     }
+
+    /// Thiết lập input tensor cho RKNN
+
+    if (!g_loaded) {
+        LOGE("[runRetinaFace] Model not loaded, skip");
+        return;
+    }
+
+    rknn_input inputs[1];
+    memset(inputs, 0, sizeof(inputs));
+
+    inputs[0].index        = 0;                          // tensor đầu vào số 0
+    inputs[0].type         = RKNN_TENSOR_FLOAT32;        // kiểu dữ liệu float32
+    inputs[0].size         = 320 * 320 * 3 * sizeof(float); // tổng bytes
+    inputs[0].fmt          = RKNN_TENSOR_NHWC;           // layout: [batch, H, W, C]
+    inputs[0].buf          = bgr_input;                  // trỏ vào buffer đã convert
+    inputs[0].pass_through = 0;                          // để RKNN tự xử lý normalize nếu cần
+
+    int ret = rknn_inputs_set(g_ctx, 1, inputs);
+    if (ret != RKNN_SUCC) {
+        LOGE("[runRetinaFace] rknn_inputs_set failed: %d", ret);
+        return;
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
