@@ -316,7 +316,7 @@ struct FaceBox {
 //   Dùng max-shift để tránh overflow float
 // =============================================================
 static inline float softmax2(float bg, float fg) {
-    float m  = std::max(bg, fg);
+    float m = std::max(bg, fg);
     float e0 = expf(bg - m);
     float e1 = expf(fg - m);
     return e1 / (e0 + e1);  // xác suất class "face"
@@ -332,8 +332,8 @@ static float iou(const FaceBox &a, const FaceBox &b) {
     float ix2 = std::min(a.x2, b.x2);
     float iy2 = std::min(a.y2, b.y2);
 
-    float iw    = std::max(0.f, ix2 - ix1);
-    float ih    = std::max(0.f, iy2 - iy1);
+    float iw = std::max(0.f, ix2 - ix1);
+    float ih = std::max(0.f, iy2 - iy1);
     float inter = iw * ih;
 
     float area_a = (a.x2 - a.x1) * (a.y2 - a.y1);
@@ -342,10 +342,119 @@ static float iou(const FaceBox &a, const FaceBox &b) {
     return inter / (area_a + area_b - inter + 1e-6f);
 }
 
+// =============================================================
+// NMS: Non-Maximum Suppression
+//   1. Sort candidates giảm dần theo score
+//   2. Duyệt từng box: chưa bị loại → giữ lại
+//   3. Loại tất cả box có iou > iou_thresh với box vừa giữ
+// =============================================================
+static std::vector<FaceBox> nms(std::vector<FaceBox> &boxes, float iou_thresh) {
+    std::sort(boxes.begin(), boxes.end(),
+              [](const FaceBox &a, const FaceBox &b) {
+                  return a.score > b.score;
+              });
 
+    std::vector<bool> suppressed(boxes.size(), false);
+    std::vector<FaceBox> result;
+
+    for (size_t i = 0; i < boxes.size(); i++) {
+        if (suppressed[i]) continue;
+
+        result.push_back(boxes[i]);
+
+        for (size_t j = i + 1; j < boxes.size(); j++) {
+            if (!suppressed[j] && iou(boxes[i], boxes[j]) > iou_thresh)
+                suppressed[j] = true;
+        }
+    }
+
+    return result;
+}
 
 
 static std::vector<Anchor> g_anchors;  // global, init 1 lần
+
+// =============================================================
+// DecodeRetinaFace
+//   Giải mã 3 tensor output → vector<FaceBox> pixel coords ảnh gốc
+//
+//   Công thức decode (SSD variance=[0.1, 0.2]):
+//     cx = anchor.cx + loc[0] * 0.1 * anchor.sx
+//     cy = anchor.cy + loc[1] * 0.1 * anchor.sy
+//     sx = anchor.sx * exp(loc[2] * 0.2)
+//     sy = anchor.sy * exp(loc[3] * 0.2)
+//
+//   Landmark decode:
+//     lm_x = anchor.cx + landms[k*2+0] * 0.1 * anchor.sx
+//     lm_y = anchor.cy + landms[k*2+1] * 0.1 * anchor.sy
+// =============================================================
+static std::vector<FaceBox> decodeRetinaFace(
+        const float *loc,       // output[0].buf  size = 4200*4
+        const float *conf,      // output[1].buf  size = 4200*2
+        const float *landms,    // output[2].buf  size = 4200*10
+        int src_w, int src_h,   // kích thước ảnh gốc (camera)
+        float score_thresh = 0.5f,
+        float iou_thresh = 0.4f) {
+
+    // --- Tính lại letterbox params (giống yuv420_to_bgr_nchw) ---
+    const float DST = 320.f;
+    float scale = std::min(DST / src_w, DST / src_h);
+    int scaled_w = (int) (src_w * scale);
+    int scaled_h = (int) (src_h * scale);
+    int pad_x = ((int) DST - scaled_w) / 2;
+    int pad_y = ((int) DST - scaled_h) / 2;
+
+    std::vector<FaceBox> candidates;
+    candidates.reserve(256);
+
+    for (int i = 0; i < 4200; i++) {
+        // --- Lọc score sớm ---
+        float score = softmax2(conf[i * 2], conf[i * 2 + 1]);
+        if (score < score_thresh) continue;
+
+        const Anchor &anc = g_anchors[i];
+
+        // --- Decode bbox (normalized [0,1] trong ảnh 320×320) ---
+        float cx = anc.cx + loc[i * 4 + 0] * 0.1f * anc.sx;
+        float cy = anc.cy + loc[i * 4 + 1] * 0.1f * anc.sy;
+        float sx = anc.sx * expf(loc[i * 4 + 2] * 0.2f);
+        float sy = anc.sy * expf(loc[i * 4 + 3] * 0.2f);
+
+        // normalized → pixel trong ảnh 320×320
+        float bx1 = (cx - sx * 0.5f) * DST;
+        float by1 = (cy - sy * 0.5f) * DST;
+        float bx2 = (cx + sx * 0.5f) * DST;
+        float by2 = (cy + sy * 0.5f) * DST;
+
+        // pixel 320×320 → pixel ảnh gốc (undo letterbox)
+        FaceBox box;
+        box.score = score;
+        box.x1 = (bx1 - pad_x) / scale;
+        box.y1 = (by1 - pad_y) / scale;
+        box.x2 = (bx2 - pad_x) / scale;
+        box.y2 = (by2 - pad_y) / scale;
+
+        // Clamp về trong ảnh gốc
+        box.x1 = std::max(0.f, std::min(box.x1, (float) src_w));
+        box.y1 = std::max(0.f, std::min(box.y1, (float) src_h));
+        box.x2 = std::max(0.f, std::min(box.x2, (float) src_w));
+        box.y2 = std::max(0.f, std::min(box.y2, (float) src_h));
+
+        // --- Decode 5 landmarks ---
+        for (int k = 0; k < 5; k++) {
+            float lx = anc.cx + landms[i * 10 + k * 2 + 0] * 0.1f * anc.sx;
+            float ly = anc.cy + landms[i * 10 + k * 2 + 1] * 0.1f * anc.sy;
+            box.lm[k * 2 + 0] = (lx * DST - pad_x) / scale;
+            box.lm[k * 2 + 1] = (ly * DST - pad_y) / scale;
+        }
+
+        candidates.push_back(box);
+    }
+
+    // --- NMS ---
+    return nms(candidates, iou_thresh);
+}
+
 
 static void generateAnchors320() {
     if (!g_anchors.empty()) return;
@@ -393,7 +502,7 @@ static void generateAnchors320() {
 // =============================================================
 // runRetinaFace: nhận YUV planes trực tiếp từ CameraX (zero-copy)
 // =============================================================
-extern "C" JNIEXPORT void JNICALL
+extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
         JNIEnv *env, jobject,
         jobject y_buffer, jobject u_buffer, jobject v_buffer,
@@ -406,7 +515,7 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
 
     if (!y_ptr || !u_ptr || !v_ptr) {
         LOGE("[runRetinaFace] GetDirectBufferAddress failed");
-        return;
+        return nullptr;
     }
 
     static int frame_count = 0;
@@ -439,7 +548,7 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
 
     if (!g_loaded) {
         LOGE("[runRetinaFace] Model not loaded, skip");
-        return;
+        return nullptr;
     }
 
     rknn_input inputs[1];
@@ -455,7 +564,7 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     int ret = rknn_inputs_set(g_ctx, 1, inputs);
     if (ret != RKNN_SUCC) {
         LOGE("[runRetinaFace] rknn_inputs_set failed: %d", ret);
-        return;
+        return nullptr;
     }
 
     /// Chạy inference
@@ -463,7 +572,7 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     ret = rknn_run(g_ctx, nullptr);
     if (ret != RKNN_SUCC) {
         LOGE("[runRetinaFace] rknn_run failed: %d", ret);
-        return;
+        return nullptr;
     }
 
     if (frame_count % 30 == 1) {
@@ -485,7 +594,7 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
     ret = rknn_outputs_get(g_ctx, NUM_OUTPUTS, outputs, nullptr);
     if (ret != RKNN_SUCC) {
         LOGE("[runRetinaFace] rknn_outputs_get failed: %d", ret);
-        return;
+        return nullptr;
     }
     // Log kiểm tra 4 giá trị đầu tiên của mỗi output
     if (frame_count % 30 == 1) {
@@ -497,7 +606,46 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
         }
     }
 
+    // --- Decode + NMS ---
+    auto *loc = (float *) outputs[0].buf;
+    auto *conf = (float *) outputs[1].buf;
+    auto *landms = (float *) outputs[2].buf;
+
+    std::vector<FaceBox> faces = decodeRetinaFace(
+            loc, conf, landms,
+            width, height,
+            /*score_thresh=*/0.5f,
+            /*iou_thresh=*/0.4f);
+
     rknn_outputs_release(g_ctx, NUM_OUTPUTS, outputs);
+
+    // --- Log kết quả ---
+    LOGI("[runRetinaFace] faces detected = %zu", faces.size());
+    for (size_t fi = 0; fi < faces.size(); fi++) {
+        const FaceBox &f = faces[fi];
+        LOGI("  face[%zu] score=%.3f bbox=[%.1f,%.1f,%.1f,%.1f]",
+             fi, f.score, f.x1, f.y1, f.x2, f.y2);
+    }
+
+    // --- Pack về float[] cho Java ---
+    // Mỗi face: [x1, y1, x2, y2, score, lm0x, lm0y, ..., lm4x, lm4y] = 15 float
+    const int FIELDS = 15;
+    int n = (int) faces.size();
+    jfloatArray result = env->NewFloatArray(n * FIELDS);
+    if (n == 0) return result;
+
+    std::vector<float> flat;
+    flat.reserve(n * FIELDS);
+    for (const FaceBox &f: faces) {
+        flat.push_back(f.x1);
+        flat.push_back(f.y1);
+        flat.push_back(f.x2);
+        flat.push_back(f.y2);
+        flat.push_back(f.score);
+        for (int k = 0; k < 10; k++) flat.push_back(f.lm[k]);
+    }
+    env->SetFloatArrayRegion(result, 0, n * FIELDS, flat.data());
+    return result;
 }
 
 extern "C" JNIEXPORT void JNICALL
