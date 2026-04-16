@@ -311,6 +311,40 @@ struct FaceBox {
     float lm[10];           // 5 landmarks × (x, y)
 };
 
+// =============================================================
+//   SOFTMAX2: tính score face từ 2 logits (bg, fg)
+//   Dùng max-shift để tránh overflow float
+// =============================================================
+static inline float softmax2(float bg, float fg) {
+    float m  = std::max(bg, fg);
+    float e0 = expf(bg - m);
+    float e1 = expf(fg - m);
+    return e1 / (e0 + e1);  // xác suất class "face"
+}
+
+// =============================================================
+//   IOU: Intersection over Union của 2 FaceBox
+//   Cả 2 box dùng định dạng (x1,y1,x2,y2) pixel
+// =============================================================
+static float iou(const FaceBox &a, const FaceBox &b) {
+    float ix1 = std::max(a.x1, b.x1);
+    float iy1 = std::max(a.y1, b.y1);
+    float ix2 = std::min(a.x2, b.x2);
+    float iy2 = std::min(a.y2, b.y2);
+
+    float iw    = std::max(0.f, ix2 - ix1);
+    float ih    = std::max(0.f, iy2 - iy1);
+    float inter = iw * ih;
+
+    float area_a = (a.x2 - a.x1) * (a.y2 - a.y1);
+    float area_b = (b.x2 - b.x1) * (b.y2 - b.y1);
+
+    return inter / (area_a + area_b - inter + 1e-6f);
+}
+
+
+
+
 static std::vector<Anchor> g_anchors;  // global, init 1 lần
 
 static void generateAnchors320() {
