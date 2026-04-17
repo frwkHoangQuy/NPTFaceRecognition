@@ -1,4 +1,4 @@
-package com.example.npufacerecognition;
+package com.facepod;
 
 public class FaceData {
     public float x1, y1, x2, y2, score;

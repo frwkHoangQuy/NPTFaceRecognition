@@ -47,7 +47,7 @@ static std::string hz_to_mhz(const std::string &hz) {
 //   Thêm thông tin NPU mới vào đây
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_npufacerecognition_MainActivity_queryNPUInfo(JNIEnv *, jobject) {
+Java_com_airport_facepod_jni_FaceEngine_nativeQueryNPUInfo(JNIEnv *, jclass clazz) {
 
     // --- Devfreq: tìm đường dẫn NPU đúng theo từng chip ---
     const char *candidates[] = {
@@ -115,7 +115,7 @@ Java_com_example_npufacerecognition_MainActivity_queryNPUInfo(JNIEnv *, jobject)
 //   Thêm thông tin model mới vào đây
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_npufacerecognition_MainActivity_queryModelInfo(JNIEnv *env, jobject,
+Java_com_airport_facepod_jni_FaceEngine_nativeQueryModelInfo(JNIEnv *env, jclass clazz,
                                                                 jobject assetManager,
                                                                 jstring modelFileName) {
     // --- Load model ---
@@ -503,8 +503,8 @@ static void generateAnchors320() {
 // runRetinaFace: nhận YUV planes trực tiếp từ CameraX (zero-copy)
 // =============================================================
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
-        JNIEnv *env, jobject,
+Java_com_airport_facepod_jni_FaceEngine_nativeRunRetinaFace(
+        JNIEnv *env, jclass clazz,
         jobject y_buffer, jobject u_buffer, jobject v_buffer,
         jint width, jint height,
         jint y_row_stride, jint uv_row_stride,
@@ -649,8 +649,8 @@ Java_com_example_npufacerecognition_MainActivity_runRetinaFace(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_npufacerecognition_MainActivity_initRetinaFace(
-        JNIEnv *env, jobject,
+Java_com_airport_facepod_jni_FaceEngine_nativeInitRetinaFace(
+        JNIEnv *env, jclass clazz,
         jobject assetManager,
         jstring modelFileName) {
     // Guard: không load lại nếu đã load rồi

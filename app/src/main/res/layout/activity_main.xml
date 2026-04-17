@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    tools:context="com.facepod.MainActivity">
 
     <!-- Lớp 1: Hiển thị hình từ camera -->
     <androidx.camera.view.PreviewView
@@ -13,7 +13,7 @@
         android:layout_height="match_parent" />
 
     <!-- Lớp 2: Vẽ bounding box lên trên -->
-    <com.example.npufacerecognition.FaceOverlayView
+    <com.facepod.FaceOverlayView
         android:id="@+id/faceOverlayView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

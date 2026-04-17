@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace "com.example.npufacerecognition"
+    namespace "com.facepod"
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.example.npufacerecognition"
+        applicationId "com.facepod"
         minSdk 25
         targetSdk 36
         versionCode 1
