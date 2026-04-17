@@ -47,7 +47,7 @@ static std::string hz_to_mhz(const std::string &hz) {
 //   Thêm thông tin NPU mới vào đây
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
-Java_com_airport_facepod_jni_FaceEngine_nativeQueryNPUInfo(JNIEnv *, jclass clazz) {
+Java_com_facepod_jni_FaceEngine_nativeQueryNPUInfo(JNIEnv *, jclass clazz) {
 
     // --- Devfreq: tìm đường dẫn NPU đúng theo từng chip ---
     const char *candidates[] = {
@@ -115,9 +115,9 @@ Java_com_airport_facepod_jni_FaceEngine_nativeQueryNPUInfo(JNIEnv *, jclass claz
 //   Thêm thông tin model mới vào đây
 // =============================================================
 extern "C" JNIEXPORT void JNICALL
-Java_com_airport_facepod_jni_FaceEngine_nativeQueryModelInfo(JNIEnv *env, jclass clazz,
-                                                                jobject assetManager,
-                                                                jstring modelFileName) {
+Java_com_facepod_jni_FaceEngine_nativeQueryModelInfo(JNIEnv *env, jclass clazz,
+                                                     jobject assetManager,
+                                                     jstring modelFileName) {
     // --- Load model ---
     const char *filename = env->GetStringUTFChars(modelFileName, nullptr);
     AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
@@ -503,7 +503,7 @@ static void generateAnchors320() {
 // runRetinaFace: nhận YUV planes trực tiếp từ CameraX (zero-copy)
 // =============================================================
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_airport_facepod_jni_FaceEngine_nativeRunRetinaFace(
+Java_com_facepod_jni_FaceEngine_nativeRunRetinaFace(
         JNIEnv *env, jclass clazz,
         jobject y_buffer, jobject u_buffer, jobject v_buffer,
         jint width, jint height,
@@ -649,7 +649,7 @@ Java_com_airport_facepod_jni_FaceEngine_nativeRunRetinaFace(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_airport_facepod_jni_FaceEngine_nativeInitRetinaFace(
+Java_com_facepod_jni_FaceEngine_nativeInitRetinaFace(
         JNIEnv *env, jclass clazz,
         jobject assetManager,
         jstring modelFileName) {

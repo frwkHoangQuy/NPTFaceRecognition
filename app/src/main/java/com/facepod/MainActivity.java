@@ -9,8 +9,8 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 
-import com.airport.facepod.hardware.CameraManager;
-import com.airport.facepod.jni.FaceEngine;
+import com.facepod.hardware.CameraManager;
+import com.facepod.jni.FaceEngine;
 import com.facepod.databinding.ActivityMainBinding;
 
 import java.nio.ByteBuffer;
@@ -75,11 +75,6 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         if (cameraManager != null) cameraManager.shutdown();
     }
-
-    /**
-     * Called on camera background thread.
-     * ⚠️ UI updates via runOnUiThread().
-     */
     private void onCameraFrame(
             ByteBuffer yBuffer, ByteBuffer uBuffer, ByteBuffer vBuffer,
             int width, int height,

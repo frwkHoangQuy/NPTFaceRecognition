@@ -1,4 +1,4 @@
-package com.airport.facepod.jni;
+package com.facepod.jni;
 
 import android.content.res.AssetManager;
 import android.util.Log;
